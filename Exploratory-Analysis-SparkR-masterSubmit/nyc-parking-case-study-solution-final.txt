@@ -1,0 +1,338 @@
+
+
+
+
+#### This solution contains one or more approaches to solve the problem
+#### If you have used an alternative approach but it works, it will be considered
+#####################
+
+
+
+# Initialise Spark
+
+library(SparkR)
+sparkR.session(master = "local")
+
+# Read data
+
+tickets_2015 <- read.df("s3://spark-c3-data/tickets_2015.csv", "csv", header = "true", inferSchema = "true")
+tickets_2016 <- read.df("s3://spark-c3-data/tickets_2016.csv", "csv", header = "true", inferSchema = "true")
+tickets_2017 <- read.df("s3://spark-c3-data/tickets_2017.csv", "csv", header = "true", inferSchema = "true")
+
+#### This data is divided by Fiscal year.
+#### In case you have considered calendar year, that is also correct.
+#### We are not modifying marks for removing duplicates - both with and without duplicates is okay
+
+
+
+#######################
+
+##### A> Examine the data
+
+# 1. total tickets
+nrow(tickets_2015)
+# 11809233
+nrow(tickets_2016)
+# 10626899
+nrow(tickets_2017)
+# 10803028
+
+
+# 2, Number of unique states that cars who got tickets came from
+
+### For the below code, replace the 'x' in "tickets_201x" with 5, 6 and 7.
+
+
+
+tickets_201x$`Registration State`<- ifelse(tickets_201x$`Registration State` == "99", "CA", tickets_201x$`Registration State`)
+
+collect(select(tickets_201x, countDistinct(tickets_201x$`Registration State`)))
+
+# The answer is 68
+
+
+### 3. Tickets with no address
+# This can be interpreted as "house address" or "violation location"
+# The only important factor is whether you have clearly stated assumptions
+
+
+# The code will be a variant of the following:
+
+tickets_null_address <- where(tickets_201x, isNull(tickets_201x$`Violation Location`))
+count(tickets_null_address)
+
+# You can also use filter() for this.
+
+
+#########################################
+
+
+######## B> Aggregation
+
+
+# A view needs to be created before a SparkDataFrame is used with SQL
+createOrReplaceTempView(tickets_201x, "tickets_201x_tbl")
+
+
+### There are two main ways of finding frequency - SparkR::groupBy and SparkR::sql
+### First, here is the way to use groupBy function
+
+
+### For the below code, replace the 'x' in "tickets_201x" with 5, 6 and 7.
+
+
+### Violation Code
+
+violationCodeCounts_201x <- summarize(groupBy(tickets_201x, tickets_201x$`Violation Code`), count = n(tickets_201x$`Violation Code`))
+head(arrange(violationCodeCounts_201x, desc(violationCodeCounts_201x$count)))
+
+### 2015
+
+### Violation Code   count
+### 1             21 1630912
+### 2             38 1418627
+### 3             14  988469
+### 4             36  839197
+### 5             37  795918
+
+
+### 2016
+
+### Violation Code   count
+### 1             21 1531587
+### 2             36 1253512
+### 3             38 1143696
+### 4             14  875614
+### 5             37  686610
+
+### 2017
+
+### Violation Code   count
+### 1             21 1528588
+### 2             36 1400614
+### 3             38 1062304
+### 4             14  893498
+### 5             20  618593
+
+
+### Now, here's the SQL way to do it
+# A view needs to be created before a SparkDataFrame is used with SQL
+createOrReplaceTempView(tickets_201x, "tickets_201x_tbl")
+
+violationCodeCounts_201x_sql <- SparkR::sql("SELECT `Violation Code`, count(`Violation Code`) AS count
+FROM tickets_201x_tbl
+GROUP BY `Violation Code`)
+
+
+###### Now, for the next few questions, `Violation Code` will be replaced by the each of the following variables:
+
+## `Vehicle Body Type`
+
+### 2015
+
+### Vehicle Body Type   count
+### 1              SUBN 3729346
+### 2              4DSD 3340014
+### 3               VAN 1709091
+### 4              DELV  892781
+### 5               SDN  524596
+
+### 2016
+
+### Vehicle Body Type   count
+### 1              SUBN 3466037
+### 2              4DSD 2992107
+### 3               VAN 1518303
+### 4              DELV  755282
+### 5               SDN  424043
+
+### 2017
+
+
+### Vehicle Body Type   count
+### 1              SUBN 3719802
+### 2              4DSD 3082020
+### 3               VAN 1411970
+### 4              DELV  687330
+### 5               SDN  438191
+
+
+## `Vehicle Make`
+
+### 2015
+
+### Vehicle Make   count
+### 1         FORD 1521874
+### 2        TOYOT 1217087
+### 3        HONDA 1102614
+### 4        NISSA  908783
+### 5        CHEVR  897845
+
+
+### 2016
+
+### Vehicle Make   count
+### 1         FORD  1324774
+### 2        TOYOT  1154790
+### 3        HONDA  1014074
+### 4        NISSA  834833
+### 5        CHEVR  759663
+
+### 2017
+
+### Vehicle Make   count
+### 1         FORD 1280958
+### 2        TOYOT 1211451
+### 3        HONDA 1079238
+### 4        NISSA  918590
+### 5        CHEVR  714655
+
+## `Issuer Precinct`
+## In both of the following, the first code is 0, which stands for "data not recorded".
+## This needs to be removed
+## If students have written '0' as one of the precincts but the rest are right, award them the marks anyway, but write a comment saying precinct #0 needed to be removed
+
+
+### 2015
+###    Issuer Precinct count
+### 2              19  579998
+### 3              18  417329
+### 4              14  392922
+### 5               1  318778
+### 6             114  314437
+
+
+### 2016
+
+###      Issuer Precinct count
+### 2              19  540569
+### 3              18  323132
+### 4              14  315311
+### 5               1  295013
+### 6             114  286924
+
+### 2017
+
+###      Issuer Precinct count
+### 2              19  521513
+### 3              14  344977
+### 4               1  321170
+### 5              18  296553
+### 6             114  289950
+
+## `Violation Precinct`
+
+## 2015
+
+###      Violation Precinct count
+### 2                 19  598351
+### 3                 18  427510
+### 4                 14  409064
+### 5                  1  329009
+### 6                114  320963
+
+
+## 2016
+
+###      Violation Precinct count
+### 2                 19  554465
+### 3                 18  331704
+### 4                 14  324467
+### 5                  1  303850
+### 6                114  291336
+
+
+
+## 2017
+
+###      Violation Precinct count
+### 2                 19  535671
+### 3                 14  352450
+### 4                  1  331810
+### 5                 18  306920
+### 6                114  296514
+
+
+
+
+### Time of day
+
+## Here are two of the possible ways to do this:
+
+#### Using 'cast'
+
+df$hh <-
+    cast(expr('substr(`Violation Time`,1,2)'), "integer")
+  df$mm <-
+    cast(expr('substr(`Violation Time`,3,2)'), "integer")
+  # Add 12 hours if its P for "PM" else 0
+  df$p <-
+    expr('if ((substr(`Violation Time`,5) == "P"),12,0)')
+  # if time is not in 12-hour format like 1620P, 1545A
+  df$hh <- ifelse(df$hh >= 12,
+                            df$hh - 12,
+                            df$hh)
+
+
+### Using CASE-WHEN
+# The following is run using SparkSQL
+
+
+SELECT ViolationTime, CASE 
+WHEN RIGHT(RTRIM(ViolationTime),1) = 'P' 
+THEN  LEFT(ViolationTime,length(ViolationTime)-1)+1200
+ELSE LEFT(ViolationTime,length(ViolationTime)-1) END as Msg
+from Sample;
+
+
+
+### Seasonality
+
+### This can be done in different ways
+### Seasonality can be defined month-wise, or season-wise (3 months)
+
+tickets_seasonality <-SparkR::sql("select
+                            case
+                            when MONTH(TO_DATE(`Issue Date`, 'MM/dd/yyyy')) between 03 and 05
+                            then 'spring'
+                            when MONTH(TO_DATE(`Issue Date`, 'MM/dd/yyyy')) between 06 and 08
+                            then 'summer'
+                            when MONTH(TO_DATE(`Issue Date`, 'MM/dd/yyyy')) between 09 and 11
+                            then 'autumn'
+                            when MONTH(TO_DATE(`Issue Date`, 'MM/dd/yyyy')) in (1,2,12)
+                            then 'winter'
+                            else 'unknown'
+                            end  as season,
+                            count(*) as no_of_tickets
+                            from tickets_201x_tbl
+                            group by 1
+                            order by 2 desc
+                            ")
+
+
+
+
+
+### Calculation of total fines of most common violation codes
+
+
+Most common violation codes:
+2015
+### 1             21 1630912
+### 2             38 1418627
+### 3             14  988469
+
+2016
+### 1             21 1531587
+### 2             36 1253512
+### 3             38 1143696
+
+2017
+### 1             21 1528588
+### 2             36 1400614
+### 3             38 1062304
+
+### Use this link to find the correct fines:
+### http://www1.nyc.gov/site/finance/vehicles/services-violation-codes.page
+
+### Take the average of the two fines mentioned.
